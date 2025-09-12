@@ -142,39 +142,28 @@ export class AddressAutocompleteGmap extends CharField {
     }
 
     populateAddressFields(place) {
-        if (!place.address_components) {
-            console.log("No address_components found in place:", place);
-            return;
-        }
-
-        console.log("Google Places API response:", place);
-        console.log("Address components:", place.address_components);
+        if (!place.address_components) return;
 
         const addressComponents = {};
         
         // Parse Google's address components
         place.address_components.forEach(component => {
             const types = component.types;
-            console.log("Processing component:", component.long_name, "types:", types);
             
             if (types.includes('street_number')) {
                 addressComponents.house_number = component.long_name;
-                console.log("Found street_number:", component.long_name);
             }
             if (types.includes('route')) {
                 addressComponents.street = component.long_name;
-                console.log("Found route/street:", component.long_name);
             }
             // For areas without route info, use sublocality as street (common in Kenya/Africa)
             if (types.includes('sublocality') || types.includes('sublocality_level_1')) {
                 if (!addressComponents.street) { // Only use if route not found
                     addressComponents.street = component.long_name;
-                    console.log("Found sublocality/street:", component.long_name);
                 }
             }
             if (types.includes('locality') || types.includes('administrative_area_level_2')) {
                 addressComponents.city = component.long_name;
-                console.log("Found locality/city:", component.long_name);
             }
             if (types.includes('administrative_area_level_1')) {
                 addressComponents.state = component.long_name;
@@ -187,44 +176,27 @@ export class AddressAutocompleteGmap extends CharField {
             }
         });
 
-        console.log("Parsed addressComponents:", addressComponents);
-
         // Update fields that exist in the current record
         const updates = {};
         const fields = this.props.record.data;
-        
-        console.log("Available fields in record:", Object.keys(fields));
 
         // Only update fields that exist in the model
         if ('street' in fields && addressComponents.street) {
             updates.street = addressComponents.street;
-            console.log("Will update street:", addressComponents.street);
-        } else {
-            console.log("Street not updated. In fields:", 'street' in fields, "Has value:", addressComponents.street);
         }
-        
         if ('house_number' in fields && addressComponents.house_number) {
             updates.house_number = addressComponents.house_number;
-            console.log("Will update house_number:", addressComponents.house_number);
         }
-        
         if ('city' in fields && addressComponents.city) {
             updates.city = addressComponents.city;
-            console.log("Will update city:", addressComponents.city);
         }
-        
         if ('zip' in fields && addressComponents.zip) {
             updates.zip = addressComponents.zip;
         }
 
-        console.log("Final updates to apply:", updates);
-
         // Apply updates if any
         if (Object.keys(updates).length > 0) {
             this.props.record.update(updates);
-            console.log("Updates applied successfully");
-        } else {
-            console.log("No updates to apply");
         }
     }
 

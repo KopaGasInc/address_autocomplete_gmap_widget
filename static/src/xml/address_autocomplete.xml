@@ -17,7 +17,6 @@
                 t-att-autocomplete="props.autocomplete or (props.isPassword ? 'new-password' : 'off')"
                 t-att-maxlength="maxLength > 0 and maxLength"
                 t-att-placeholder="placeholder"
-                t-on-input="onInput"
                 t-on-blur="onBlur"
                 t-ref="input"
         />

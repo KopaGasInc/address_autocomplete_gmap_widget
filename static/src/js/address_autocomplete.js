@@ -170,6 +170,7 @@ export class AddressAutocompleteGmap extends CharField {
             }
             if (types.includes('country')) {
                 addressComponents.country = component.long_name;
+                addressComponents.country_code = component.short_name; // ISO country code
             }
             if (types.includes('postal_code')) {
                 addressComponents.zip = component.long_name;
@@ -193,10 +194,43 @@ export class AddressAutocompleteGmap extends CharField {
         if ('zip' in fields && addressComponents.zip) {
             updates.zip = addressComponents.zip;
         }
+        if ('country_name' in fields && addressComponents.country) {
+            updates.country_name = addressComponents.country;
+        }
+        if ('country_code' in fields && addressComponents.country_code) {
+            updates.country_code = addressComponents.country_code;
+        }
 
         // Apply updates if any
         if (Object.keys(updates).length > 0) {
             this.props.record.update(updates);
+            
+            // Handle country_id field separately if it exists (Many2one field)
+            if ('country_id' in fields && addressComponents.country_code) {
+                this.updateCountryField(addressComponents.country_code, addressComponents.country);
+            }
+        }
+    }
+
+    async updateCountryField(countryCode, countryName) {
+        try {
+            // Search for country record by ISO code
+            const country = await this.orm.searchRead(
+                'res.country',
+                [['code', '=', countryCode.toUpperCase()]],
+                ['id', 'name']
+            );
+            
+            if (country && country.length > 0) {
+                // Update country_id with the found country record
+                this.props.record.update({
+                    country_id: [country[0].id, country[0].name]
+                });
+            } else {
+                console.warn(`Country not found for code: ${countryCode}`);
+            }
+        } catch (error) {
+            console.error('Error updating country field:', error);
         }
     }
 

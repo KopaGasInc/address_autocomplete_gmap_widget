@@ -27,6 +27,10 @@ export class AddressAutocompleteGmap extends CharField {
         this.marker = false;
         this.mapref = useRef("googleMap");
         this.notification = useService("notification");
+        
+        // Bind event handlers
+        this.onInput = this.onInput.bind(this);
+        this.onBlur = this.onBlur.bind(this);
         onWillStart(async () => {
                 const api_key = await this._getGMapAPIKey();
                 if(!api_key){
@@ -121,6 +125,20 @@ export class AddressAutocompleteGmap extends CharField {
             });
         this.map.setCenter({lat: parseFloat(lat), lng: parseFloat(lng)});
 
+    }
+
+    onInput(ev) {
+        // Handle input changes - delegate to parent class if needed
+        if (super.onInput) {
+            super.onInput(ev);
+        }
+    }
+
+    onBlur(ev) {
+        // Handle blur events - delegate to parent class if needed
+        if (super.onBlur) {
+            super.onBlur(ev);
+        }
     }
 
     populateAddressFields(place) {

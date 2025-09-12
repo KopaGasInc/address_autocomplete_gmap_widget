@@ -165,6 +165,13 @@ export class AddressAutocompleteGmap extends CharField {
                 addressComponents.street = component.long_name;
                 console.log("Found route/street:", component.long_name);
             }
+            // For areas without route info, use sublocality as street (common in Kenya/Africa)
+            if (types.includes('sublocality') || types.includes('sublocality_level_1')) {
+                if (!addressComponents.street) { // Only use if route not found
+                    addressComponents.street = component.long_name;
+                    console.log("Found sublocality/street:", component.long_name);
+                }
+            }
             if (types.includes('locality') || types.includes('administrative_area_level_2')) {
                 addressComponents.city = component.long_name;
                 console.log("Found locality/city:", component.long_name);

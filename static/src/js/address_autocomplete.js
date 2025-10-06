@@ -50,6 +50,10 @@ export class AddressAutocompleteGmap extends CharField {
                             center: {lat: -25.363, lng: 131.044 },
                             zoom: 6,
                           });
+
+                // Initialize Geocoder for reverse geocoding
+                this.geocoder = new google.maps.Geocoder();
+
                 // Add Autocomplete
                 this.autocomplete = new google.maps.places.Autocomplete(this.input.el);
                 this.autocomplete.setFields(["place_id", "geometry", "name","address_components"]);
@@ -120,11 +124,138 @@ export class AddressAutocompleteGmap extends CharField {
             this.marker.setMap(null);
         }
         this.marker = new google.maps.Marker({
-                position: { lat: parseFloat(lat), lng: parseFloat(lng) },  // Set the marker position using lat/lng
-                map: this.map,   // Title for the marker
+                position: { lat: parseFloat(lat), lng: parseFloat(lng) },
+                map: this.map,
+                draggable: true,
+                title: "Drag to adjust location",
+                animation: google.maps.Animation.DROP
             });
+
+        // Create info window for user guidance
+        if (!this.infoWindow) {
+            this.infoWindow = new google.maps.InfoWindow();
+        }
+
+        // Show info window on first marker creation
+        const infoContent = `
+            <div style="padding: 5px;">
+                <strong>📍 Location Pin</strong><br/>
+                <small>Drag the pin to adjust the exact location</small>
+            </div>
+        `;
+        this.infoWindow.setContent(infoContent);
+        this.infoWindow.open(this.map, this.marker);
+
+        // Auto-close info window after 4 seconds
+        setTimeout(() => {
+            if (this.infoWindow) {
+                this.infoWindow.close();
+            }
+        }, 4000);
+
+        // Add event listeners
+        this.marker.addListener('dragstart', () => {
+            if (this.infoWindow) {
+                this.infoWindow.close();
+            }
+        });
+
+        this.marker.addListener('dragend', (event) => {
+            this.onMarkerDragEnd(event);
+
+            // Show brief confirmation
+            this.infoWindow.setContent('<div style="padding: 5px;"><strong>✓ Location updated</strong></div>');
+            this.infoWindow.open(this.map, this.marker);
+            setTimeout(() => {
+                if (this.infoWindow) {
+                    this.infoWindow.close();
+                }
+            }, 2000);
+        });
+
+        // Show info on marker click
+        this.marker.addListener('click', () => {
+            this.infoWindow.setContent(infoContent);
+            this.infoWindow.open(this.map, this.marker);
+        });
+
         this.map.setCenter({lat: parseFloat(lat), lng: parseFloat(lng)});
 
+    }
+
+    onMarkerDragEnd(event) {
+        const newLat = event.latLng.lat();
+        const newLng = event.latLng.lng();
+
+        // Update coordinates
+        this.updateCoordinatesFromDrag(newLat, newLng);
+
+        // Center map on new position
+        this.map.setCenter({lat: newLat, lng: newLng});
+
+        // Perform reverse geocoding to update address
+        this.reverseGeocode(newLat, newLng);
+    }
+
+    updateCoordinatesFromDrag(lat, lng) {
+        // Calculate approximate viewport bounds based on current zoom
+        const currentBounds = this.map.getBounds();
+        if (currentBounds) {
+            const ne = currentBounds.getNorthEast();
+            const sw = currentBounds.getSouthWest();
+
+            this.setLatLng(
+                lat,
+                lng,
+                ne.lat(),
+                ne.lng(),
+                sw.lat(),
+                sw.lng()
+            );
+        } else {
+            // If no bounds, just update lat/lng
+            this.props.record.update({
+                [this.props.LatField]: lat,
+                [this.props.LngField]: lng
+            });
+        }
+    }
+
+    reverseGeocode(lat, lng) {
+        const latlng = { lat: lat, lng: lng };
+
+        this.geocoder.geocode({ location: latlng }, (results, status) => {
+            if (status === "OK") {
+                if (results[0]) {
+                    // Update address field with formatted address
+                    const formattedAddress = results[0].formatted_address;
+                    this.setValue(formattedAddress);
+
+                    // Update input field visually
+                    if (this.input && this.input.el) {
+                        this.input.el.value = formattedAddress;
+                    }
+
+                    // Create a place-like object for populateAddressFields
+                    const placeData = {
+                        address_components: results[0].address_components,
+                        geometry: {
+                            location: {
+                                lat: () => lat,
+                                lng: () => lng
+                            }
+                        }
+                    };
+
+                    // Auto-populate address fields
+                    this.populateAddressFields(placeData);
+                } else {
+                    console.log("No results found for reverse geocoding");
+                }
+            } else {
+                console.log("Geocoder failed due to: " + status);
+            }
+        });
     }
 
     onInput(ev) {

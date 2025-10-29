@@ -54,6 +54,12 @@ export class AddressAutocompleteGmap extends CharField {
                 // Initialize Geocoder for reverse geocoding
                 this.geocoder = new google.maps.Geocoder();
 
+                // Store geofence polygons array
+                this.geofencePolygons = [];
+
+                // Load and display depot geofences
+                this.loadDepotGeofences();
+
                 // Add Autocomplete
                 this.autocomplete = new google.maps.places.Autocomplete(this.input.el);
                 this.autocomplete.setFields(["place_id", "geometry", "name","address_components"]);
@@ -74,9 +80,12 @@ export class AddressAutocompleteGmap extends CharField {
                                 this.setMarker(lat,lng,neLat,neLng,swLat,swLng);
                                 this.setLatLng(lat,lng,neLat,neLng,swLat,swLng);
                                 this.setValue(value);
-                                
+
                                 // Auto-populate address fields if they exist
                                 this.populateAddressFields(place);
+
+                                // Check geofence status in real-time
+                                this.checkGeofenceStatus(lat, lng);
                             }
                     });
 
@@ -249,6 +258,9 @@ export class AddressAutocompleteGmap extends CharField {
 
                     // Auto-populate address fields
                     this.populateAddressFields(placeData);
+
+                    // Check geofence status after marker drag
+                    this.checkGeofenceStatus(lat, lng);
                 } else {
                     console.log("No results found for reverse geocoding");
                 }
@@ -351,7 +363,7 @@ export class AddressAutocompleteGmap extends CharField {
                 [['code', '=', countryCode.toUpperCase()]],
                 ['id', 'name']
             );
-            
+
             if (country && country.length > 0) {
                 // Update country_id with the found country record
                 this.props.record.update({
@@ -362,6 +374,118 @@ export class AddressAutocompleteGmap extends CharField {
             }
         } catch (error) {
             console.error('Error updating country field:', error);
+        }
+    }
+
+    async checkGeofenceStatus(lat, lng) {
+        /**
+         * Check geofence status in real-time and notify CX agent.
+         * This provides immediate feedback so agents can inform customers
+         * about service area coverage before completing registration.
+         */
+        try {
+            const result = await this.orm.call(
+                'sale.depot',
+                'get_depot_info_for_location',
+                [lat, lng]
+            );
+
+            if (result.in_geofence) {
+                // Customer is within service area
+                this.notification.add(
+                    `✓ Location verified! Customer is within ${result.depot_name} service area. Phone verification will be required.`,
+                    {
+                        title: '✓ Service Area Confirmed',
+                        type: 'success',
+                        sticky: false,
+                    }
+                );
+            } else {
+                // Customer is outside service area
+                this.notification.add(
+                    'This location is outside our current service areas. Customer cannot be registered for service at this time, but their information will be recorded for future expansion planning and analytics.',
+                    {
+                        title: '⚠ Outside Service Area',
+                        type: 'warning',
+                        sticky: true,
+                    }
+                );
+            }
+        } catch (error) {
+            console.error('Geofence check failed:', error);
+            // Don't show error to user - geofence check is supplementary
+        }
+    }
+
+    async loadDepotGeofences() {
+        /**
+         * Load all depot geofence boundaries and display them on the map.
+         * This helps CX agents visualize service area coverage.
+         */
+        try {
+            // Fetch all depots with polygon boundaries
+            const depots = await this.orm.searchRead(
+                'sale.depot',
+                [['polygon_boundaries', '!=', false]],
+                ['name', 'polygon_boundaries']
+            );
+
+            if (!depots || depots.length === 0) {
+                console.log('No depot geofences found to display');
+                return;
+            }
+
+            // Clear existing polygons
+            this.geofencePolygons.forEach(polygon => polygon.setMap(null));
+            this.geofencePolygons = [];
+
+            // Draw each depot's geofence
+            depots.forEach(depot => {
+                try {
+                    const boundaries = JSON.parse(depot.polygon_boundaries);
+
+                    if (boundaries && boundaries.length > 0) {
+                        const coords = boundaries[0];
+
+                        // Convert to Google Maps LatLng format
+                        const paths = coords.map(coord => ({
+                            lat: coord[1],  // latitude is second element
+                            lng: coord[0]   // longitude is first element
+                        }));
+
+                        // Create polygon
+                        const polygon = new google.maps.Polygon({
+                            paths: paths,
+                            strokeColor: '#2563eb',  // Blue stroke
+                            strokeOpacity: 0.8,
+                            strokeWeight: 2,
+                            fillColor: '#3b82f6',    // Lighter blue fill
+                            fillOpacity: 0.15,
+                            map: this.map
+                        });
+
+                        // Add click listener to show depot info
+                        polygon.addListener('click', (event) => {
+                            if (this.depotInfoWindow) {
+                                this.depotInfoWindow.close();
+                            }
+                            this.depotInfoWindow = new google.maps.InfoWindow({
+                                content: `<div style="padding: 8px;"><strong>${depot.name}</strong><br/><small>Service Area Boundary</small></div>`,
+                                position: event.latLng
+                            });
+                            this.depotInfoWindow.open(this.map);
+                        });
+
+                        this.geofencePolygons.push(polygon);
+                    }
+                } catch (error) {
+                    console.warn(`Failed to parse geofence for depot ${depot.name}:`, error);
+                }
+            });
+
+            console.log(`Loaded ${this.geofencePolygons.length} depot geofences`);
+        } catch (error) {
+            console.error('Failed to load depot geofences:', error);
         }
     }
 

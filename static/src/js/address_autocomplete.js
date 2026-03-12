@@ -321,27 +321,27 @@ export class AddressAutocompleteGmap extends CharField {
         });
 
         // Update fields that exist in the current record
+        // Clear all address fields first, then set new values to avoid stale data
         const updates = {};
         const fields = this.props.record.data;
 
-        // Only update fields that exist in the model
-        if ('street' in fields && addressComponents.street) {
-            updates.street = addressComponents.street;
+        if ('street' in fields) {
+            updates.street = addressComponents.street || false;
         }
-        if ('house_number' in fields && addressComponents.house_number) {
-            updates.house_number = addressComponents.house_number;
+        if ('house_number' in fields) {
+            updates.house_number = addressComponents.house_number || false;
         }
-        if ('city' in fields && addressComponents.city) {
-            updates.city = addressComponents.city;
+        if ('city' in fields) {
+            updates.city = addressComponents.city || false;
         }
-        if ('zip' in fields && addressComponents.zip) {
-            updates.zip = addressComponents.zip;
+        if ('zip' in fields) {
+            updates.zip = addressComponents.zip || false;
         }
-        if ('country_name' in fields && addressComponents.country) {
-            updates.country_name = addressComponents.country;
+        if ('country_name' in fields) {
+            updates.country_name = addressComponents.country || false;
         }
-        if ('country_code' in fields && addressComponents.country_code) {
-            updates.country_code = addressComponents.country_code;
+        if ('country_code' in fields) {
+            updates.country_code = addressComponents.country_code || false;
         }
 
         // Apply updates if any

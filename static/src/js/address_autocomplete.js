@@ -275,12 +275,42 @@ export class AddressAutocompleteGmap extends CharField {
         if (super.onInput) {
             super.onInput(ev);
         }
+        // When the user clears the address text, drop the stale coordinates
+        // and viewport bounds. Without this, lat/long left over from a prior
+        // place_changed event keep driving downstream UI (OTP widgets,
+        // geofence-derived flags) and let a save through with a phantom
+        // location. place_changed will repopulate the fields when a new
+        // suggestion is picked.
+        const value = (ev && ev.target && ev.target.value) ? ev.target.value : '';
+        if (!value.trim()) {
+            this.clearCoordinates();
+        }
     }
 
     onBlur(ev) {
         // Handle blur events - delegate to parent class if needed
         if (super.onBlur) {
             super.onBlur(ev);
+        }
+    }
+
+    clearCoordinates() {
+        if (this.marker) {
+            this.marker.setMap(null);
+            this.marker = null;
+        }
+        if (this.infoWindow) {
+            this.infoWindow.close();
+        }
+        const updates = {};
+        if (this.props.LatField) updates[this.props.LatField] = false;
+        if (this.props.LngField) updates[this.props.LngField] = false;
+        if (this.props.NELatField) updates[this.props.NELatField] = false;
+        if (this.props.NELngField) updates[this.props.NELngField] = false;
+        if (this.props.SWLatField) updates[this.props.SWLatField] = false;
+        if (this.props.SWLngField) updates[this.props.SWLngField] = false;
+        if (Object.keys(updates).length > 0) {
+            this.props.record.update(updates);
         }
     }
 

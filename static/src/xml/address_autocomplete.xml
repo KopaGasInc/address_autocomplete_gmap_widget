@@ -18,6 +18,7 @@
                 t-att-maxlength="maxLength > 0 and maxLength"
                 t-att-placeholder="placeholder"
                 t-ref="input"
+                t-on-input="onInput"
         />
     </t>
     <div id="googleMap" class="gmap_class" t-ref="googleMap" style="height:200px"/>

@@ -45,6 +45,10 @@ export class AddressAutocompleteGmap extends CharField {
         this.mapref = useRef("googleMap");
         this.notification = useService("notification");
         
+        // Register the global Maps auth-failure handler before the API loads,
+        // so it is in place when Google authenticates the loaded script.
+        this._registerMapsAuthFailureHandler();
+
         // Bind event handlers
         this.onInput = this.onInput.bind(this);
         this.onBlur = this.onBlur.bind(this);
@@ -136,6 +140,35 @@ export class AddressAutocompleteGmap extends CharField {
 
                 }
         })
+    }
+
+    _registerMapsAuthFailureHandler() {
+        // The Maps JS API calls window.gm_authFailure on auth/authorization
+        // failures (billing disabled, invalid/expired key, referrer blocked).
+        // It never reveals which one, so the message stays generic. Kept free
+        // of form-specific guidance (this widget is reused elsewhere) — the
+        // prospect save guard delivers the "Incomplete Capture" instruction.
+        // Registered once globally and shown once per page load so repeated
+        // failures don't stack notifications.
+        if (window.gm_authFailure) {
+            return;
+        }
+        const notification = this.notification;
+        let shown = false;
+        window.gm_authFailure = () => {
+            if (shown) {
+                return;
+            }
+            shown = true;
+            notification.add(
+                _t("The map is temporarily unavailable, so a service location can't be captured right now. Please notify your administrator if this continues."),
+                {
+                    title: _t("Map Unavailable"),
+                    type: "warning",
+                    sticky: true,
+                }
+            );
+        };
     }
 
     setValue(value){

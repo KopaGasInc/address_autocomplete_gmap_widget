@@ -5,8 +5,24 @@ import { registry } from "@web/core/registry";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
-import { loadJS } from "@web/core/assets";
 import { CharField, charField } from "@web/views/fields/char/char_field";
+
+// Google's official inline bootstrap loader for the Maps JavaScript API
+// (https://developers.google.com/maps/documentation/javascript/load-maps-js-api).
+// Running this snippet defines google.maps.importLibrary synchronously and then
+// loads the API on demand (loading=async semantics) on the first importLibrary
+// call. Loading the maps/api/js URL directly via loadJS does NOT reliably
+// define importLibrary, hence the bootstrap snippet. Guarded so it only
+// bootstraps once even when several widget instances mount together.
+function bootstrapGoogleMaps(apiKey) {
+    if (window.google && window.google.maps && window.google.maps.importLibrary) {
+        return;
+    }
+    (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
+        key: apiKey,
+        v: "weekly",
+    });
+}
 
 export class AddressAutocompleteGmap extends CharField {
     static template = "web.AddressAutocompleteGmap";
@@ -43,13 +59,9 @@ export class AddressAutocompleteGmap extends CharField {
                     });
                   return;
                 }
-                // Load the Maps JS API through the async bootstrap loader.
-                // loading=async installs google.maps.importLibrary instead of
-                // pulling every library up front via the legacy &libraries=
-                // param. This is Google's recommended pattern and silences the
-                // "loaded directly without loading=async" performance warning.
-                const url = `https://maps.googleapis.com/maps/api/js?key=${api_key}&loading=async`;
-                await loadJS(url);
+                // Install google.maps.importLibrary via Google's official
+                // inline bootstrap loader, then pull in libraries on demand.
+                bootstrapGoogleMaps(api_key);
                 // Pull in every library this widget touches. Awaiting these in
                 // onWillStart (which OWL blocks on before mount) guarantees the
                 // classes — and the google.maps.* namespace the rest of this

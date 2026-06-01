@@ -25,6 +25,7 @@ export class AddressAutocompleteGmap extends CharField {
         this.orm = useService("orm");
         this._gmapApiKey = false;
         this.marker = false;
+        this.gmapsReady = false;
         this.mapref = useRef("googleMap");
         this.notification = useService("notification");
         
@@ -40,11 +41,33 @@ export class AddressAutocompleteGmap extends CharField {
                         type: "danger",
                         sticky: true,
                     });
+                  return;
                 }
-                var url = `https://maps.googleapis.com/maps/api/js?key=${api_key}&libraries=places,maps async`;
+                // Load the Maps JS API through the async bootstrap loader.
+                // loading=async installs google.maps.importLibrary instead of
+                // pulling every library up front via the legacy &libraries=
+                // param. This is Google's recommended pattern and silences the
+                // "loaded directly without loading=async" performance warning.
+                const url = `https://maps.googleapis.com/maps/api/js?key=${api_key}&loading=async`;
                 await loadJS(url);
+                // Pull in every library this widget touches. Awaiting these in
+                // onWillStart (which OWL blocks on before mount) guarantees the
+                // classes — and the google.maps.* namespace the rest of this
+                // component reads — are ready by the time onMounted runs.
+                await Promise.all([
+                    google.maps.importLibrary("maps"),      // Map, Marker, InfoWindow, Polygon, Animation
+                    google.maps.importLibrary("places"),    // places.Autocomplete
+                    google.maps.importLibrary("geocoding"), // Geocoder
+                    google.maps.importLibrary("core"),      // LatLng, LatLngBounds
+                ]);
+                this.gmapsReady = true;
         });
         onMounted(()=>{
+                // Bail out cleanly if the API never loaded (missing key or a
+                // failed bootstrap) so we don't throw "google is not defined".
+                if (!this.gmapsReady) {
+                    return;
+                }
                 // Map Added
                 this.map = new google.maps.Map(this.mapref.el, {
                             center: {lat: -25.363, lng: 131.044 },
